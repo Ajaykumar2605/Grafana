@@ -1,0 +1,71 @@
+#Install Prometheus (Main Monitoring Server)
+
+#Step-1 Create user
+sudo useradd --no-create-home --shell /bin/false prometheus
+
+#Step-2 Download Prometheus
+cd /opt
+curl -LO https://github.com/prometheus/prometheus/releases/latest/download/prometheus-2.53.0.linux-amd64.tar.gz
+tar -xvf prometheus-2.53.0.linux-amd64.tar.gz
+sudo mv prometheus-2.53.0.linux-amd64 /usr/local/prometheus
+
+#Alternative (RPM)
+cd /opt
+sudo dnf install ./prometheus*.rpm
+ 
+
+#Step-3 Prepare directories
+sudo mkdir -p /etc/prometheus
+sudo mkdir -p /var/lib/prometheus
+
+#Step-4 Copy configuration
+sudo cp /usr/local/prometheus/prometheus.yml /etc/prometheus/
+
+#Step-5 Edit prometheus.yml
+vim  /etc/prometheus/prometheus.yml
+global:
+  scrape_interval: 10s
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]  # or custom port
+  - job_name: "node_exporter"
+    static_configs:
+      - targets:
+          - "server1-ip:9100"
+          - "server2-ip:9100"
+          - "your_server_ip:9100"
+
+#Step-6 Create systemd service
+sudo tee /etc/systemd/system/prometheus.service <<EOF
+[Unit]
+Description=Prometheus Server
+Wants=network-online.target
+After=network-online.target
+[Service]
+User=prometheus
+ExecStart=/usr/local/prometheus/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --web.console.templates=/usr/local/prometheus/consoles \
+  --web.console.libraries=/usr/local/prometheus/console_libraries \
+  --web.listen-address=0.0.0.0:9090    # modify if custom port
+Restart=always
+[Install]
+WantedBy=multi-user.target
+EOF
+
+#Step-7 Permissions
+sudo chown -R prometheus:prometheus /usr/local/prometheus /etc/prometheus /var/lib/prometheus
+
+#Step-8 Start Prometheus
+sudo systemctl daemon-reload
+sudo systemctl enable --now prometheus
+sudo systemctl status prometheus
+ 
+#Step-9 Firewall
+sudo firewall-cmd --add-port=9090/tcp --permanent   # or custom port like 9091
+sudo firewall-cmd --reload
+
+#Step-10 Validate
+http://<server-ip>:9090
