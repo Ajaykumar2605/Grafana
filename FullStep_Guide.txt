@@ -1,0 +1,155 @@
+Grafana + Prometheus + Node Exporter on RHEL 9.x
+
+✅ Step 1 — Install Node Exporter (Client / Server Machines)
+1️⃣ Create user
+sudo useradd --no-create-home --shell /bin/false node_exporter
+2️⃣ Download Node Exporter (latest)
+cd /opt
+curl -LO https://github.com/prometheus/node_exporter/releases/latest/download/node_exporter-1.8.1.linux-amd64.tar.gz
+tar -xvf node_exporter-1.8.1.linux-amd64.tar.gz
+sudo mv node_exporter-1.8.1.linux-amd64 /usr/local/node_exporter
+📌 Alternative (RPM install)
+cd /opt
+sudo dnf install ./node_exporter*.rpm
+3️⃣ Create systemd service
+sudo tee /etc/systemd/system/node_exporter.service <<EOF
+[Unit]
+Description=Node Exporter
+After=network.target
+[Service]
+User=node_exporter
+ExecStart=/usr/local/node_exporter/node_exporter
+[Install]
+WantedBy=multi-user.target
+EOF
+4️⃣ Start service
+sudo systemctl daemon-reload
+sudo systemctl enable --now node_exporter
+5️⃣ Validate
+sudo systemctl status node_exporter
+curl http://localhost:9100/metrics
+________________________________________
+🔥 Firewall (for monitored servers)
+sudo firewall-cmd --add-port=9100/tcp --permanent
+sudo firewall-cmd --reload
+________________________________________
+✅ Step 2 — Install Prometheus (Main Monitoring Server)
+1️⃣ Create user
+sudo useradd --no-create-home --shell /bin/false prometheus
+2️⃣ Download Prometheus
+cd /opt
+curl -LO https://github.com/prometheus/prometheus/releases/latest/download/prometheus-2.53.0.linux-amd64.tar.gz
+tar -xvf prometheus-2.53.0.linux-amd64.tar.gz
+sudo mv prometheus-2.53.0.linux-amd64 /usr/local/prometheus
+📌 Alternative (RPM)
+cd /opt
+sudo dnf install ./prometheus*.rpm
+ 
+3️⃣ Prepare directories
+sudo mkdir -p /etc/prometheus
+sudo mkdir -p /var/lib/prometheus
+4️⃣ Copy configuration
+sudo cp /usr/local/prometheus/prometheus.yml /etc/prometheus/
+5️⃣ Edit /etc/prometheus/prometheus.yml
+global:
+  scrape_interval: 10s
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]  # or custom port
+  - job_name: "node_exporter"
+    static_configs:
+      - targets:
+          - "server1-ip:9100"
+          - "server2-ip:9100"
+          - "your_server_ip:9100"
+6️⃣ Create systemd service
+sudo tee /etc/systemd/system/prometheus.service <<EOF
+[Unit]
+Description=Prometheus Server
+Wants=network-online.target
+After=network-online.target
+
+
+[Service]
+User=prometheus
+ExecStart=/usr/local/prometheus/prometheus \
+  --config.file=/etc/prometheus/prometheus.yml \
+  --storage.tsdb.path=/var/lib/prometheus \
+  --web.console.templates=/usr/local/prometheus/consoles \
+  --web.console.libraries=/usr/local/prometheus/console_libraries \
+  --web.listen-address=0.0.0.0:9090    # modify if custom port
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+7️⃣ Permissions
+sudo chown -R prometheus:prometheus /usr/local/prometheus /etc/prometheus /var/lib/prometheus
+8️⃣ Start Prometheus
+sudo systemctl daemon-reload
+sudo systemctl enable --now prometheus
+sudo systemctl status prometheus
+🔥 Firewall
+sudo firewall-cmd --add-port=9090/tcp --permanent   # or custom port like 9091
+sudo firewall-cmd --reload
+🌐 Access
+http://<server-ip>:9090
+________________________________________
+✅ Step 3 — Install Grafana on RHEL 9  on Server Machines
+1️⃣ Add Grafana Repository
+cat <<EOF | sudo tee /etc/yum.repos.d/grafana.repo
+[grafana]
+name=Grafana Repo
+baseurl=https://packages.grafana.com/oss/rpm
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.grafana.com/gpg.key
+EOF
+2️⃣ Install Grafana
+sudo dnf install -y grafana
+3️⃣ Enable & Start
+sudo systemctl enable --now grafana-server
+sudo systemctl status grafana-server
+🔥 Firewall
+sudo firewall-cmd --add-port=3000/tcp --permanent
+sudo firewall-cmd --reload
+🌐 Access
+http://<server-ip>:3000
+Default Login
+Username: admin
+Password: admin
+________________________________________
+✅ Step 4 — Add Prometheus Datasource in Grafana
+1.	Grafana → Settings → Data Sources
+2.	Select Prometheus
+3.	Enter URL:
+http://<prometheus-server-ip>:9090
+4.	Click Save & Test
+________________________________________
+✅ Step 5 — Import Grafana Dashboards
+Dashboard	ID
+Node Exporter Full	1860
+Prometheus 2.0 Stats	3662
+Steps:
+Grafana → Dashboards → Import → Enter ID → Load → Select Prometheus Data Source → Import
+________________________________________
+🧾 Final Firewall Summary (All Required Ports)
+Component	Port
+Prometheus	9090 / custom
+Node Exporter	9100
+Grafana	3000
+sudo firewall-cmd --add-port=9090/tcp --permanent
+sudo firewall-cmd --add-port=9091/tcp --permanent     # only if custom port used
+sudo firewall-cmd --add-port=9100/tcp --permanent
+sudo firewall-cmd --add-port=3000/tcp --permanent
+sudo firewall-cmd --reload
+________________________________________
+🎉 FINAL RESULT
+After completing all steps:
+Tool	URL
+Node Exporter Metrics	http://<server>:9100/metrics
+Prometheus UI	http://<server>:9090
+Grafana UI	http://<server>:3000
+Dashboards	Metrics Visible via 1860 + 3662 imports
