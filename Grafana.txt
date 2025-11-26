@@ -1,0 +1,29 @@
+#Install Grafana on RHEL 9  on Server Machines
+
+#Step-1 Add Grafana Repository
+cat <<EOF | sudo tee /etc/yum.repos.d/grafana.repo
+[grafana]
+name=Grafana Repo
+baseurl=https://packages.grafana.com/oss/rpm
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://packages.grafana.com/gpg.key
+EOF
+
+#Step-2 Install Grafana
+sudo dnf install -y grafana
+
+#Step-3 Enable & Start
+sudo systemctl enable --now grafana-server
+sudo systemctl status grafana-server
+
+#Step-4 Firewall
+sudo firewall-cmd --add-port=3000/tcp --permanent
+sudo firewall-cmd --reload
+
+#Step-5 Access Validate
+http://<server-ip>:3000
+Default Login
+Username: admin
+Password: admin
