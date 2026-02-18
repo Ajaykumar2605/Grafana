@@ -5,7 +5,7 @@ sudo useradd --no-create-home --shell /bin/false prometheus
 
 #Step-2 Download Prometheus
 cd /opt
-curl -LO https://github.com/prometheus/prometheus/releases/latest/download/prometheus-2.53.0.linux-amd64.tar.gz
+curl -LO "https://github.com/prometheus/prometheus/releases/download/${LATEST}/prometheus-${LATEST#v}.linux-amd64.tar.gz"
 tar -xvf prometheus-2.53.0.linux-amd64.tar.gz
 sudo mv prometheus-2.53.0.linux-amd64 /usr/local/prometheus
 
